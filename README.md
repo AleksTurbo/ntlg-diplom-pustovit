@@ -450,7 +450,16 @@ stage: build
 
 <img src="img/dockerhub-reg.png"/>
 
-4. 
+4. Деплой новой версии сборки производим при помощи инструмента "lachlanevenson/k8s-kubectl"
+
+- процесс установки новой версии производится скриптом:
+
+```.yml
+  script:
+    - sed -i "s/__VERSION__/${VERSION}.${CI_PIPELINE_ID}/" manifest.yaml
+    - kubectl get replicasets -n stage -o wide
+    - kubectl apply -n stage -f manifest.yaml
+```
 
 - наблюдаем процесс обновления PODов в кластере
 
