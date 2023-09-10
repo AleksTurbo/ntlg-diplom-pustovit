@@ -1,0 +1,76 @@
+stages:
+- set-version
+- build
+- test
+- release
+
+variables:
+  VERSION: ${CI_COMMIT_MESSAGE}
+
+getVersion:
+  stage: .pre
+  script:
+    - echo ${CI_COMMIT_MESSAGE}
+    - VERSION=${CI_COMMIT_MESSAGE}
+    - echo ${VERSION}
+    - echo -e "VERSION=${VERSION}" > variables.env
+  artifacts:
+    reports:
+      dotenv: variables.env
+
+setVersion:
+  stage: set-version
+  script:
+    - echo ${VERSION}
+    - sed -i "s/__VERSION__/v.${VERSION}.${CI_PIPELINE_ID}/" index.html
+    - cat index.html
+
+build-image:
+  stage: build
+  image:
+    name: gcr.io/kaniko-project/executor:v1.9.0-debug
+    entrypoint: [""]
+  variables:
+    COMMIT_TIME: $(git_timestamp)
+  before_script:
+    - AUTH=$(echo -n ${CI_REGISTRY_USER}:${CI_JOB_TOKEN} | base64)
+    - cp -f "${CI_PROJECT_DIR}/config.json" /kaniko/.docker/config.json
+    - sed -i "s/PLACE_HOLDER/$AUTH/" /kaniko/.docker/config.json
+    - echo ${VERSION}
+    - echo ${CI_PIPELINE_ID}
+    - echo ${CI_COMMIT_TIMESTAMP}
+    - echo ${CI_COMMIT_TAG}
+    - echo ${CI_COMMIT_MESSAGE}
+    - echo ${CI_COMMIT_REF_NAME}
+    - echo ${COMMIT_TIME}
+    - echo ${VERSION}
+    # - export COMMIT_TIME=$(git show -s --format=%ct $CI_COMMIT_SHA) dd  
+  script:
+    - pwd
+    - ls -la
+    - sed -i "s/__VERSION__/v. ${VERSION}.${CI_PIPELINE_ID}/" ${CI_PROJECT_DIR}/index.html
+    - sed -i "s/__TIMESTAMP__/${CI_COMMIT_TIMESTAMP}/" ${CI_PROJECT_DIR}/index.html
+    - cat index.html
+    - 
+      /kaniko/executor --context "${CI_PROJECT_DIR}" --dockerfile "${CI_PROJECT_DIR}/Dockerfile" --destination "${CI_REGISTRY_IMAGE}:${VERSION}.${CI_PIPELINE_ID}"
+
+test:
+  stage: test
+  script:
+    - pwd
+    - echo "TEST"
+
+release:
+  image:
+    name: lachlanevenson/k8s-kubectl:latest
+    entrypoint: ["/bin/sh", "-c"]
+  stage: release
+  tags:
+    - runner
+  only:
+    - main
+  script:
+    - echo pwd
+    - sed -i "s/__VERSION__/${VERSION}.${CI_PIPELINE_ID}/" manifest.yaml
+    - kubectl get replicasets -n stage -o wide
+    - kubectl apply -n stage -f manifest.yaml

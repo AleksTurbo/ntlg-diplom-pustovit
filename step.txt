@@ -1,0 +1,44 @@
+echo 'source /root/yandex-cloud/completion.zsh.inc' >>  ~/.zshrc
+yc compute image list --folder-id standard-images
+wg-quick up wg0
+terraform init
+terraform workspace new prod 
+terraform workspace new stage
+terraform workspace list 
+terraform workspace show
+terraform workspace select stage  
+terraform validate
+
+terraform plan
+terraform apply
+terraform apply -auto-approve
+
+ssh ubuntu@158.160.47.0
+ssh ubuntu@84.252.141.35
+ssh ubuntu@51.250.43.56
+
+***#2
+curl -L -o kubespray.tar.gz https://github.com/kubernetes-sigs/kubespray/archive/refs/tags/v2.22.1.tar.gz
+ln -s kubespray-2.22.1 kubespray
+pip install -r requirements.txt
+
+cd //kubespray
+ansible-playbook /kubespray/cluster.yml -u ubuntu -b -v -i /home/aleksturbo/ntlg-diplom-pustovit/kubespray/inventory/inventory.ini
+
+***#3
+
+
+
+
+
+kubectl get nodes
+kubectl get nodes -o wide
+
+kubectl get pods --all-namespaces
+kubectl run busybox1 -it --rm --image=busybox -- sh
+kubectl get all --all-namespaces
+
+kubectl proxy --port=6443  
+
+kubectl get svc -n monitoring
+kubectl edit svc prometheus-k8s -n monitoring

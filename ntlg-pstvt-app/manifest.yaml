@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ntlg-pustovit-deployment
+  namespace: stage
+spec:
+  selector:
+    matchLabels:
+      app: ntlg-pustovit-app
+  replicas: 2
+  template:
+    metadata:
+      labels:
+        app: ntlg-pustovit-app
+    spec:
+      containers:
+       - name: ntlg-pustovit-app
+         image: aleksturbo/ntlg-pstvt-app:__VERSION__
+         imagePullPolicy: Always
+         ports:
+           - containerPort: 80
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: ntlg-pustovit-service
+  namespace: stage
+spec:
+  selector:
+    app: ntlg-pustovit-app
+  ports:
+    - port: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ntlg-pustovit-ingress
+  namespace: stage
+  annotations:
+    kubernetes.io/ingress.class: nginx
+spec:
+  ingressClassName: nginx
+  rules:
+    - http:
+        paths:
+          - path: "/"
+            pathType: Prefix
+            backend:
+              service:
+                name: ntlg-pustovit-service
+                port:
+                  number: 80
