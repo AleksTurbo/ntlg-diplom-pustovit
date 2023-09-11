@@ -448,6 +448,8 @@ stage: build
 
 3. Результат сборки отправляем на ресурс "hub.docker.com"
 
+[DockerHUB](https://hub.docker.com/r/aleksturbo/ntlg-pstvt-app)
+
 <img src="img/dockerhub-reg.png"/>
 
 4. Деплой новой версии сборки производим при помощи инструмента "lachlanevenson/k8s-kubectl"
