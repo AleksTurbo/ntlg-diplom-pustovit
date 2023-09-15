@@ -10,6 +10,10 @@ variable "instance-nat-ip" {
   default = "192.168.10.254"
 }
 
+variable "lab_net_id" {
+  default = "enp0vphumjjlsrcsubin"
+}
+
 variable "domain" {
   default = "netology.ycloud"
 }

@@ -31,11 +31,7 @@ resource "yandex_iam_service_account_static_access_key" "sa-static-key" {
 }
 ```
 
-2. Подготовим backend для Terraform посредством размещения "terraform.tfstate" в S3 bucket в созданном ЯО:
-
-[backend TF](/terraform/bknd/bucket.tf)
-
-3. Настроим workspaces:
+2. Настроим workspaces:
 
 ```bash
 [root@oracle terraform]# terraform workspace list 
@@ -48,6 +44,45 @@ resource "yandex_iam_service_account_static_access_key" "sa-static-key" {
 [root@oracle terraform]# terraform workspace show
 stage
 ```
+
+
+3. Подготовим backend для Terraform посредством размещения "terraform.tfstate" в S3 bucket в созданном ЯО:
+
+[backend TF](/terraform/bknd/bucket.tf)
+
+- настраиваем инфраструктуру на хранение состояния в S3:
+
+```bash
+backend "s3" {
+    endpoint   = "storage.yandexcloud.net"
+    bucket     = "trfrm-tf-bucket"
+    region     = "ru-central1"
+    key        = "terraform.tfstate"
+
+    skip_region_validation      = true
+    skip_credentials_validation = true
+  }
+```
+
+- переносим хранение tfstate в S3 bucket в созданном ЯО
+
+```bash
+[aleksturbo@oracle terraform]$ terraform init -backend-config="access_key=$ACCESS_KEY" -backend-config="secret_key=$SECRET_KEY"
+
+Initializing the backend...
+
+Initializing provider plugins...
+- Reusing previous version of yandex-cloud/yandex from the dependency lock file
+- Reusing previous version of hashicorp/local from the dependency lock file
+- Using previously-installed yandex-cloud/yandex v0.97.0
+- Using previously-installed hashicorp/local v2.4.0
+
+Terraform has been successfully initialized!
+```
+
+<img src="img/s3-tfstate.png"/>
+
+
 
 4. Создадим VPC с подсетями в разных зонах доступности:
 
@@ -98,6 +133,24 @@ internal_ip_address_nodes = {
   "stage-node-2" = "10.10.30.32"
 }
 ```
+
+- В результате отработки terraform автоматически формируется inventory для KubeSpray:
+
+```bash
+// Create inventory for KubeSpray
+resource "local_file" "inventory" {
+  count   = 3
+  content  = <<EOT
+[all]
+node1 ansible_host=${yandex_compute_instance.cluster-k8s[0].network_interface.0.nat_ip_address}
+node2 ansible_host=${yandex_compute_instance.cluster-k8s[1].network_interface.0.nat_ip_address}
+node3 ansible_host=${yandex_compute_instance.cluster-k8s[2].network_interface.0.nat_ip_address}
+...
+EOT
+  filename = "../kubespray/inventory/inventory.ini"
+```
+
+[inventory ](/kubespray/inventory/inventory.ini)
 
 6. Результат выполнения раздела №1
 
@@ -402,41 +455,67 @@ kubectl apply -f prometheus-nodeport-svc.yaml
 
 <img src="img/k8s grafana gui.png"/>
 
+- Доступы к мониторингу:
+
+[Prometeus](http://aleksturbo.ru:9090/)
+
+[Grafana](http://aleksturbo.ru:3000/login)
+
+admin/513825513825
+
 - Развернем тестовое приложение:
 
 [ntlg-pstvt-app](/ntlg-pstvt-app/)
 
+[GitHUB](https://github.com/AleksTurbo/ntlg-pstvt-app)
+
 ```bash
 kubectl apply -f manifest.yaml
 
-root@node1:~# kubectl get po -n stage
+
+[aleksturbo@oracle terraform]$ kubectl get po -n stage
 NAME                                        READY   STATUS    RESTARTS   AGE
-ntlg-pustovit-deployment-7465fdbd4b-656md   1/1     Running   0          17h
-ntlg-pustovit-deployment-7465fdbd4b-mck9w   1/1     Running   0          17h
+ntlg-pustovit-deployment-775f78b45c-55lnh   1/1     Running   0          40m
+ntlg-pustovit-deployment-775f78b45c-knx7z   1/1     Running   0          40m
 
-root@node1:~# kubectl get svc -n stage
+[aleksturbo@oracle terraform]$ kubectl get svc -n stage
 NAME                       TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)        AGE
-ntlg-pustovit-deployment   NodePort    10.233.31.33    <none>        80:31080/TCP   46h
-ntlg-pustovit-service      ClusterIP   10.233.59.116   <none>        80/TCP         46h
-
+ntlg-pustovit-service      ClusterIP   10.233.41.72    <none>        80/TCP         40m
+ntlg-pustovit-service-np   NodePort    10.233.27.252   <none>        80:30008/TCP   40m
 ```
 
 Диагностический доступ получаем через NodePort
 
 <img src="img/YC ntlg-pstvt-app.PNG"/>
 
+- Организуем доступ к приложению и сервисам мониторинга посредством Network Load Balancer YC
+
+<img src="img/YC nlb.PNG"/>
+
 ## Установка и настройка CI/CD
 
 1. Для реализации процесса автоматизированного развертывания применим инструмент GitLab CI
 
-- для указания версии сборки используется поле "Commit message" 
+[GitLab CI](https://gitlab.com/AleksTurbo/ntlg-pstvt-app)
 
-<img src="img/commit_message_1.png"/>
-<img src="img/commit_message_2.png"/>
+- сборка приложения происходит при каждом коммите, но деплой приложения производится при присваивании тега=релиза
 
+```yaml
+release:
+  image:
+    name: lachlanevenson/k8s-kubectl:latest
+    entrypoint: ["/bin/sh", "-c"]
+  stage: release
+  tags:
+    - runner
+  rules:
+      - if: '$CI_COMMIT_TAG'
+```
 [gitlab-ci](/ntlg-pstvt-app/.gitlab-ci.yml)
 
-<img src="img/gitlab_ci.png"/>
+<img src="img/gitlab_ci-pipeline.png"/>
+-
+<img src="img/gitlab_ci-release.png"/>
 
 2. Для сборки docker образа используем инструмент kaniko
 
@@ -505,5 +584,7 @@ ntlg-pustovit-deployment-565bd4cfff-8mc8p   0/1     Terminating         0       
 ```
 
 5. Получаем результат
+
+[NGINX`s APP](http://aleksturbo.ru/)
 
 <img src="img/nginx-app.png"/>

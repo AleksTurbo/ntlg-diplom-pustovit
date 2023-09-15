@@ -38,7 +38,7 @@ secret_key = "${yandex_iam_service_account_static_access_key.sa-static-key.secre
 skip_region_validation = true
 skip_credentials_validation = true
 EOT
-  filename = "../backend.key"
+  filename = "../../.trfrm/backend.key"
 }
 
 // Add "backend_cfg" to bucket
